@@ -1,5 +1,6 @@
 #include "util.hpp"
 #include "database.hpp"
+#include "onlineUser.hpp"
 namespace gomoku
 {
 #define HOST "39.108.170.136"
@@ -8,10 +9,14 @@ namespace gomoku
 #define PASS "xiaoyuanli123@"
 #define DBNAME "gomoku"
 
+using std::cout;
+using std::endl;
+
+
     void test_mysql_util()
     {
         MYSQL *mysql = util::mysql::create(HOST, PORT, USER, PASS, DBNAME);
-        char *sql = "insert stu values(null, 18, '李瑟');";
+        const char *sql = "insert stu values(null, 18, '李瑟');";
         if (!util::mysql::exec(mysql, sql))
         {
             mylog::ERROR_LOG("出错了");
@@ -67,9 +72,32 @@ namespace gomoku
         utb.Lose(1);
     }
 
+    void test_onlineUser()
+    {
+        OnlineUser ol;
+        wsserver_t::connection_ptr conn;
+        uint64_t uid = 2;
+        ol.EnterRoom(uid, conn);
+        if(ol.InRoom(uid))
+        {
+            cout << "uid=2 is in hall.\n";
+        }else
+        {
+            cout << "uid=2 is not in hall.\n";
+        }
+        ol.ExitRoom(uid);
+        if(ol.InRoom(uid))
+        {
+            cout << "uid=2 is in hall.\n";
+        }else
+        {
+            cout << "uid=2 is not in hall.\n";
+        }
+    }
+
 }
 int main()
 {
-    gomoku::test_database_usertable();
+    gomoku::test_onlineUser();
     return 0;
 }
