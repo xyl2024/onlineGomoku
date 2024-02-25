@@ -1,6 +1,9 @@
 #include "util.hpp"
 #include "database.hpp"
 #include "onlineUser.hpp"
+#include "session.hpp"
+#include "matcher.hpp"
+
 namespace gomoku
 {
 #define HOST "39.108.170.136"
@@ -9,9 +12,8 @@ namespace gomoku
 #define PASS "xiaoyuanli123@"
 #define DBNAME "gomoku"
 
-using std::cout;
-using std::endl;
-
+    using std::cout;
+    using std::endl;
 
     void test_mysql_util()
     {
@@ -78,18 +80,20 @@ using std::endl;
         wsserver_t::connection_ptr conn;
         uint64_t uid = 2;
         ol.EnterRoom(uid, conn);
-        if(ol.InRoom(uid))
+        if (ol.InRoom(uid))
         {
             cout << "uid=2 is in hall.\n";
-        }else
+        }
+        else
         {
             cout << "uid=2 is not in hall.\n";
         }
         ol.ExitRoom(uid);
-        if(ol.InRoom(uid))
+        if (ol.InRoom(uid))
         {
             cout << "uid=2 is in hall.\n";
-        }else
+        }
+        else
         {
             cout << "uid=2 is not in hall.\n";
         }
