@@ -73,24 +73,24 @@ namespace gomoku
             // ...
         }
 
-        /// 处理聊天动作
-        Json::Value HandleChat(const Json::Value &req)
-        {
-        }
+        // /// 处理聊天动作
+        // Json::Value HandleChat(const Json::Value &req)
+        // {
+        // }
 
-        /// 处理下棋动作
-        Json::Value HandleChess(const Json::Value &req)
-        {
-        }
+        // /// 处理下棋动作
+        // Json::Value HandleChess(const Json::Value &req)
+        // {
+        // }
 
-        /// 处理玩家退出房间动作
-        void HandleExitRoom(uint64_t uid)
-        {
-        }
-        /// 广播给房间内所有玩家
-        void Broadcast(const Json::Value &rsp)
-        {
-        }
+        // /// 处理玩家退出房间动作
+        // void HandleExitRoom(uint64_t uid)
+        // {
+        // }
+        // /// 广播给房间内所有玩家
+        // void Broadcast(const Json::Value &rsp)
+        // {
+        // }
     };
 
     using room_ptr = std::shared_ptr<Room>;

@@ -13,6 +13,7 @@
 namespace gomoku
 {
 #define SESSION_FOREVER -1
+#define SESSION_TIMEOUT 30000
 
     /*会话状态*/
     typedef enum
