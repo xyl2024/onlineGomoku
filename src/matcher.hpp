@@ -154,7 +154,6 @@ namespace gomoku
         {
             mylog::INFO_LOG("玩家匹配管理模块初始化完成");
         }
-        ~Matcher();
         /*添加玩家到对应的阻塞队列中*/
         bool Add(uint64_t uid)
         {

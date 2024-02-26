@@ -1,8 +1,4 @@
-#include "util.hpp"
-#include "database.hpp"
-#include "onlineUser.hpp"
-#include "session.hpp"
-#include "matcher.hpp"
+#include "server.hpp"
 
 namespace gomoku
 {
@@ -102,6 +98,7 @@ namespace gomoku
 }
 int main()
 {
-    gomoku::test_onlineUser();
+    gomoku::GomokuServer svr(HOST, PORT, USER, PASS, DBNAME);
+    svr.Start(8888);
     return 0;
 }
