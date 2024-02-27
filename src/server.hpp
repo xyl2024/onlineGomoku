@@ -115,7 +115,8 @@ namespace gomoku
             conn->set_body(body);
         }
 
-        void OrganizeHttpResponseJson(wsserver_t::connection_ptr& conn, bool result, websocketpp::http::status_code::value status, const std::string& reason)
+        /*组织一个json格式的http响应*/
+        void __OrganizeHttpResponseJson(wsserver_t::connection_ptr& conn, bool result, websocketpp::http::status_code::value status, const std::string& reason)
         {
             Json::Value rsp;
             rsp["result"] = result;
@@ -139,22 +140,22 @@ namespace gomoku
             if(false == ret)
             {
                 mylog::DEBUG_LOG("Json反序列化失败");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "请求的Json格式错误");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "请求的Json格式错误");
             }
             // 3.处理用户名/密码未输入的情况
             if(reg_info["username"].isNull() || reg_info["password"].isNull())
             {
                 mylog::DEBUG_LOG("未输入用户名/密码");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "未输入用户名/密码");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "未输入用户名/密码");
             }
             // 4.将用户名&密码录入数据库
             ret = _ut.AddtUser(reg_info); 
             if(false == ret)
             {
                 mylog::DEBUG_LOG("用户名已被占用");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "用户名已被占用");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "用户名已被占用");
             }
-            return OrganizeHttpResponseJson(conn, true, websocketpp::http::status_code::ok, "注册成功");
+            return __OrganizeHttpResponseJson(conn, true, websocketpp::http::status_code::ok, "注册成功");
         }
         /*处理用户登录请求*/
         void LoginHandler(wsserver_t::connection_ptr conn)
@@ -167,19 +168,19 @@ namespace gomoku
             if(false == ret)
             {
                 mylog::DEBUG_LOG("Json反序列化失败");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "请求的Json格式错误");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "请求的Json格式错误");
             }
             //2.与数据库中数据校验
             if(login_info["username"].isNull() || login_info["password"].isNull())
             {
                 mylog::DEBUG_LOG("未输入用户名/密码");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "未输入用户名/密码");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "未输入用户名/密码");
             }
             ret = _ut.SelectByUsrPwd(login_info);
             if(false == ret)
             {
                 mylog::DEBUG_LOG("用户名/密码错误");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "用户名/密码错误");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "用户名/密码错误");
             }
             //3.验证成功，给客户端创建session
             uint64_t uid = login_info["id"].asInt64();
@@ -187,7 +188,7 @@ namespace gomoku
             if(sp.get() == nullptr)
             {
                 mylog::DEBUG_LOG("创建会话失败");
-                return OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::internal_server_error, "创建会话失败");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::internal_server_error, "创建会话失败");
             }
             //设置session过期时间
             _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
@@ -195,11 +196,80 @@ namespace gomoku
             //4.设置响应头部Set-Cookie:sid
             std::string sid = "SID=" + std::to_string(sp->GetSid());
             conn->append_header("Set-Cookie", sid);
-            return OrganizeHttpResponseJson(conn, true, websocketpp::http::status_code::ok, "登录成功");
+            return __OrganizeHttpResponseJson(conn, true, websocketpp::http::status_code::ok, "登录成功");
         }
+
+        /*获取HttpCookie中指定key的value值*/
+        bool __GetCookieValueByKey(const std::string& cookie, const std::string& key, std::string& value)
+        {
+            /*
+                GET /sample_page.html HTTP/1.1
+                Host: www.example.org
+                Cookie: yummy_cookie=choco; tasty_cookie=strawberry
+            */
+            //1.以; 为间隔分割字符串
+            std::string sep = "; ";
+            std::vector<std::string> kv;
+            util::string::split(cookie, sep, kv);
+            //2.对单个字符串，以=分割为key和val
+            for(std::string s : kv)
+            {
+                std::vector<std::string> kv_2;
+                util::string::split(s, "=", kv_2);
+                if(kv_2.size() != 2) continue;
+                if(kv_2[0] == key)
+                {
+                    value = kv_2[1]; //3.找到key为SID的val值
+                    return true;
+                }    
+            }
+            return false;
+        }
+        
         /*处理获取用户信息请求*/
         void InfoHandler(wsserver_t::connection_ptr conn)
-        {}
+        {
+            Json::Value err_info;
+
+            // 1.根据请求中的Cookie，获取对应的会话(sid)
+            std::string cookie_str = conn->get_request_header("Cookie");
+            if(cookie_str.empty())
+            {
+                mylog::INFO_LOG("请求中没有Cookie字段");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "请求中没有Cookie字段");
+            }
+            std::string sid_str;
+            bool ret = __GetCookieValueByKey(cookie_str, "SID", sid_str);
+            if(ret == false)
+            {
+                mylog::INFO_LOG("Cookie字段中没有sid字段");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "Cookie字段中没有sid字段");
+            }
+            Session::ptr sp = _sm.GetSessionBySid(std::stol(sid_str));
+            if(sp.get() == nullptr)
+            {
+                mylog::INFO_LOG("无法找到Session对象，请重新登录");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "无法找到Session对象，请重新登录");
+            }
+            // 2.会话中有uid，根据uid从数据库中提取用户信息并响应
+            uint64_t uid = sp->GetUid();
+            Json::Value user_info;
+            ret = _ut.SelectById(uid, user_info);
+            if(false == ret)
+            {
+                mylog::INFO_LOG("无法找到用户信息");
+                return __OrganizeHttpResponseJson(conn, false, websocketpp::http::status_code::bad_request, "无法找到用户信息");
+            }
+            // 获取信息成功，组织响应
+            std::string body;
+            util::json::serialize(user_info, body);
+            conn->set_body(body);
+            conn->append_header("Content-Type", "application/json");
+            conn->set_status(websocketpp::http::status_code::ok);
+
+            // 3.刷新会话过期时间
+            _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
+        }
     };
 
 }
