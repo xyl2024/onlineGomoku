@@ -79,31 +79,13 @@ namespace gomoku
             }
         }
 
+        /*建立游戏大厅的长连接*/
         void __WsOpenHall(wsserver_t::connection_ptr conn)
         {
-            /*建立游戏大厅的长连接*/
             // 1.判断客户端是否登录
             // 1.1根据请求中的Cookie，获取对应的会话(sid)
-            std::string cookie_str = conn->get_request_header("Cookie");
-            if(cookie_str.empty())
-            {
-                mylog::INFO_LOG("请求中没有Cookie字段，请重新登录");
-                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "请求中没有Cookie字段，请重新登录");
-            }
-            std::string sid_str;
-            bool ret = __GetCookieValueByKey(cookie_str, "SID", sid_str);
-            if(ret == false)
-            {
-                mylog::INFO_LOG("Cookie字段中没有sid字段");
-                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "Cookie字段中没有sid字段");
-            }
-            Session::ptr sp = _sm.GetSessionBySid(std::stol(sid_str));
-            if(sp.get() == nullptr)
-            {
-                mylog::INFO_LOG("无法找到Session对象，请重新登录");
-                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "无法找到Session对象，请重新登录");
-            }
-
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
             // 至此，表示当前用户已登录
 
             // 2.判断客户端是否重复登录
@@ -120,7 +102,7 @@ namespace gomoku
             _sm.SetSessionTime(sp->GetSid(), SESSION_FOREVER);
         }
 
-        /*处理websocket长连接的回调*/
+        /*处理websocket长连接开启的回调*/
         void WsOpenCallback(websocketpp::connection_hdl hdl)
         {
             // 1.根据http资源路径，判断是什么长连接请求
@@ -138,12 +120,112 @@ namespace gomoku
 
         }
 
+        /*从Cookie中获取Session对象，如果获取不到则意味着用户没有登录(减少重复代码)*/
+        Session::ptr __GetSessionByCookie(wsserver_t::connection_ptr conn)
+        {
+            std::string cookie_str = conn->get_request_header("Cookie");
+            if(cookie_str.empty())
+            {
+                mylog::INFO_LOG("请求中没有Cookie字段，请重新登录");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "请求中没有Cookie字段，请重新登录");
+                return Session::ptr();
+            }
+            std::string sid_str;
+            bool ret = __GetCookieValueByKey(cookie_str, "SID", sid_str);
+            if(ret == false)
+            {
+                mylog::INFO_LOG("Cookie字段中没有sid字段");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "Cookie字段中没有sid字段");
+                return Session::ptr();
+            }
+            Session::ptr sp = _sm.GetSessionBySid(std::stol(sid_str));
+            if(sp.get() == nullptr)
+            {
+                mylog::INFO_LOG("无法找到Session对象，请重新登录");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "无法找到Session对象，请重新登录");
+                return Session::ptr();
+            }
+            return sp; //成功返回，此时意味着当前用户正常登录
+        }
+
+        /*关闭游戏大厅的长连接*/
+        void __WsCloseHall(wsserver_t::connection_ptr conn)
+        {
+            // 1.将用户移出游戏大厅
+            // 1.1判断客户端是否登录
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
+
+            // 1.2移除玩家
+            _ou.ExitHall(sp->GetUid());
+            // 2.设置session失效时间
+            _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
+        }
+
+        /*处理websocket长连接断开的回调*/
         void WsCloseCallback(websocketpp::connection_hdl hdl)
         {
+            // 1.根据http资源路径，判断是什么长连接请求
+            wsserver_t::connection_ptr conn = _wssvr.get_con_from_hdl(hdl);
+            auto req = conn->get_request();
+            std::string uri = req.get_uri();
+            if(uri == "/hall") //建立游戏大厅的长连接
+            {
+                __WsCloseHall(conn);
+            }
+            else if(uri == "/room") //建立游戏房间的长连接
+            {
+
+            }
         }
+
+        void __WsMsgHall(wsserver_t::connection_ptr conn, wsserver_t::message_ptr msg)
+        {
+            std::string rsp_str;
+            Json::Value rsp_json;
+            // 1.身份验证，判断当前用户是否在线，获取用户id
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
+            // 2.获取通信请求信息
+            std::string req_str = msg->get_payload();
+            Json::Value req_json;
+            bool ret = util::json::unserialize(req_str, req_json);
+            if(ret == false)
+            {
+                return __OrganizeWebSocketResponseJson(conn, "json_unserialize_failed", false, "客户端发送的请求Json解析失败");
+            }
+            // 3.处理通信请求：开始匹配对战、停止匹配对战
+            if(!req_json["optype"].isNull() && req_json["optype"].asString() == "match_start")
+            {
+                _mch.Add(sp->GetUid());
+                return __OrganizeWebSocketResponseJson(conn, "match_start", true, "成功添加到匹配队列");
+            }
+            else if(!req_json["optype"].isNull() && req_json["optype"].asString() == "match_stop")
+            {
+                _mch.Del(sp->GetUid());
+                return __OrganizeWebSocketResponseJson(conn, "match_stop", true, "从匹配队列中移除");
+            }
+            else
+                return __OrganizeWebSocketResponseJson(conn, "unkonw", false, "未知的请求");
+        }
+
+        /*处理websocket长连接通信消息的回调*/
         void WsMsgCallback(websocketpp::connection_hdl hdl, wsserver_t::message_ptr msg)
         {
+            // 1.根据http资源路径，判断是什么长连接请求
+            wsserver_t::connection_ptr conn = _wssvr.get_con_from_hdl(hdl);
+            auto req = conn->get_request();
+            std::string uri = req.get_uri();
+            if(uri == "/hall") //建立游戏大厅的长连接
+            {
+                __WsMsgHall(conn, msg);
+            }
+            else if(uri == "/room") //建立游戏房间的长连接
+            {
+
+            }
         }
+        
     private:
     /*处理HTTP相关业务*/
         /*处理静态资源请求*/
