@@ -45,6 +45,7 @@ namespace gomoku
     
     private:
         /*websocketpp服务器设置的回调函数*/
+        /*处理http短连接的回调*/
         void HttpCallback(websocketpp::connection_hdl hdl)
         {
             // 1.获取连接对象conn
@@ -58,17 +59,17 @@ namespace gomoku
             // 2.根据不同请求，调用不同的业务处理函数
             if(method == "POST" && uri == "/reg")
             {
-                mylog::DEBUG_LOG("正在处理用户注册请求");
+                mylog::DEBUG_LOG("正在处理用户注册的HTTP请求");
                 return RegisteHandler(conn);
             }
             else if(method == "POST" && uri == "/login")
             {
-                mylog::DEBUG_LOG("正在处理用户登录请求");
+                mylog::DEBUG_LOG("正在处理用户登录的HTTP请求");
                 return LoginHandler(conn);
             }
             else if(method == "GET" && uri == "/info")
             {
-                mylog::DEBUG_LOG("正在处理获取用户信息请求");
+                mylog::DEBUG_LOG("正在处理获取用户信息的HTTP请求");
                 return InfoHandler(conn);
             }
             else 
@@ -77,9 +78,66 @@ namespace gomoku
                 return FileHandler(conn); //静态资源请求
             }
         }
+
+        void __WsOpenHall(wsserver_t::connection_ptr conn)
+        {
+            /*建立游戏大厅的长连接*/
+            // 1.判断客户端是否登录
+            // 1.1根据请求中的Cookie，获取对应的会话(sid)
+            std::string cookie_str = conn->get_request_header("Cookie");
+            if(cookie_str.empty())
+            {
+                mylog::INFO_LOG("请求中没有Cookie字段，请重新登录");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "请求中没有Cookie字段，请重新登录");
+            }
+            std::string sid_str;
+            bool ret = __GetCookieValueByKey(cookie_str, "SID", sid_str);
+            if(ret == false)
+            {
+                mylog::INFO_LOG("Cookie字段中没有sid字段");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "Cookie字段中没有sid字段");
+            }
+            Session::ptr sp = _sm.GetSessionBySid(std::stol(sid_str));
+            if(sp.get() == nullptr)
+            {
+                mylog::INFO_LOG("无法找到Session对象，请重新登录");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "无法找到Session对象，请重新登录");
+            }
+
+            // 至此，表示当前用户已登录
+
+            // 2.判断客户端是否重复登录
+            if(_ou.InHall(sp->GetUid()) || _ou.InRoom(sp->GetUid()))
+            {
+                mylog::INFO_LOG("用户重复登录！");
+                __OrganizeWebSocketResponseJson(conn, "hall_ready", false, "用户重复登录！");
+            }
+            // 3.将当前客户加入游戏大厅
+            _ou.EnterHall(sp->GetUid(), conn);
+            // 4.响应给客户端
+            __OrganizeWebSocketResponseJson(conn, "hall_ready", true, "建立游戏大厅长连接成功！");
+            // 5.设置Session生效时间为永久
+            _sm.SetSessionTime(sp->GetSid(), SESSION_FOREVER);
+        }
+
+        /*处理websocket长连接的回调*/
         void WsOpenCallback(websocketpp::connection_hdl hdl)
         {
+            // 1.根据http资源路径，判断是什么长连接请求
+            wsserver_t::connection_ptr conn = _wssvr.get_con_from_hdl(hdl);
+            auto req = conn->get_request();
+            std::string uri = req.get_uri();
+            if(uri == "/hall") //建立游戏大厅的长连接
+            {
+                __WsOpenHall(conn);
+            }
+            else if(uri == "/room") //建立游戏房间的长连接
+            {
+
+            }
+
         }
+
         void WsCloseCallback(websocketpp::connection_hdl hdl)
         {
         }
@@ -115,7 +173,18 @@ namespace gomoku
             conn->set_body(body);
         }
 
-        /*组织一个json格式的http响应*/
+        /*组织一个json格式的websocket响应(减少重复代码)*/
+        void __OrganizeWebSocketResponseJson(wsserver_t::connection_ptr conn, const std::string& optype, bool result ,const std::string& reason)
+        {
+            Json::Value rsp;
+            rsp["optype"] = optype;
+            rsp["result"] = result;
+            rsp["reason"] = reason;
+            std::string body;
+            util::json::serialize(rsp, body);
+            conn->send(body);
+        }
+        /*组织一个json格式的http响应(减少重复代码)*/
         void __OrganizeHttpResponseJson(wsserver_t::connection_ptr& conn, bool result, websocketpp::http::status_code::value status, const std::string& reason)
         {
             Json::Value rsp;
