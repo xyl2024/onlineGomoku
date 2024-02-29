@@ -86,11 +86,11 @@ namespace gomoku
             std::string uri = req.get_uri();
             if(uri == "/hall") //建立游戏大厅的长连接
             {
-                __WsOpenHall(conn);
+                WsOpenHall(conn);
             }
             else if(uri == "/room") //建立游戏房间的长连接
             {
-
+                WsOpenRoom(conn);
             }
         }
         /*处理websocket长连接断开的回调*/
@@ -102,7 +102,7 @@ namespace gomoku
             std::string uri = req.get_uri();
             if(uri == "/hall") //关闭游戏大厅的长连接
             {
-                __WsCloseHall(conn);
+                WsCloseHall(conn);
             }
             else if(uri == "/room") //关闭游戏房间的长连接
             {
@@ -118,7 +118,7 @@ namespace gomoku
             std::string uri = req.get_uri();
             if(uri == "/hall") //处理游戏大厅长连接的消息请求
             {
-                __WsMsgHall(conn, msg);
+                WsMsgHall(conn, msg);
             }
             else if(uri == "/room") //处理游戏房间长连接的消息请求
             {
@@ -266,7 +266,7 @@ namespace gomoku
         }
     private:/*websocket回调函数调用的业务处理*/
         /*建立游戏大厅的长连接*/
-        void __WsOpenHall(wsserver_t::connection_ptr conn)
+        void WsOpenHall(wsserver_t::connection_ptr conn)
         {
             // 1.判断客户端是否登录
             // 1.1根据请求中的Cookie，获取对应的会话(sid)
@@ -287,8 +287,43 @@ namespace gomoku
             // 5.设置Session生效时间为永久
             _sm.SetSessionTime(sp->GetSid(), SESSION_FOREVER);
         }
+        /*建立游戏房间的长连接*/
+        void WsOpenRoom(wsserver_t::connection_ptr conn)
+        {
+            //1.获取当前用户session
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
+            //2.检验重复登录：游戏房间/游戏大厅
+            if(_ou.InHall(sp->GetUid()) || _ou.InRoom(sp->GetUid()))
+            {
+                mylog::INFO_LOG("用户重复登录！");
+                __OrganizeWebSocketResponseJson(conn, "room_ready", false, "用户重复登录！");
+            }
+            //3.判断当前用户是否已经创建了房间
+            room_ptr rp = _rm.GetRoomByUid(sp->GetUid());
+            if(rp.get() == nullptr)
+            {
+                mylog::INFO_LOG("未找到当前用户的房间！");
+                __OrganizeWebSocketResponseJson(conn, "room_ready", false, "未找到当前用户的房间！");
+            }
+            //4.将当前用户添加进房间中的在线用户管理中
+            _ou.EnterRoom(sp->GetUid(), conn);
+            //5.设置Session生效时间为永久
+            _sm.SetSessionTime(sp->GetSid(), SESSION_FOREVER);
+            //6.响应给客户端
+            Json::Value rsp;
+            rsp["optype"] = "room_ready";
+            rsp["result"] = true;
+            rsp["room_id"] = (Json::UInt64)rp->GetRid();
+            rsp["uid"] = (Json::UInt64)sp->GetUid();
+            rsp["white_id"] = (Json::UInt64)rp->GetWhiteUid();
+            rsp["black_id"] = (Json::UInt64)rp->GetBlackUid();
+            std::string body;
+            util::json::serialize(rsp, body);
+            conn->send(body);
+        }
         /*关闭游戏大厅的长连接*/
-        void __WsCloseHall(wsserver_t::connection_ptr conn)
+        void WsCloseHall(wsserver_t::connection_ptr conn)
         {
             // 1.将用户移出游戏大厅
             // 1.1判断客户端是否登录
@@ -300,8 +335,25 @@ namespace gomoku
             // 2.设置session失效时间
             _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
         }
+        /*
+        
+        not tested.
+        
+        */
+        /*关闭游戏房间的长连接*/
+        void WsCloseRoom(wsserver_t::connection_ptr conn)
+        {
+            // 1.将用户移出在线用户管理中的游戏房间
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
+            _ou.ExitRoom(sp->GetUid());
+            // 2.设置session失效时间
+            _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
+            // 3.将用户移出游戏房间，当房间无用户时，会销毁房间
+            _rm.RemoveUser(sp->GetUid());
+        }
         /*处理游戏大厅长连接的消息请求*/
-        void __WsMsgHall(wsserver_t::connection_ptr conn, wsserver_t::message_ptr msg)
+        void WsMsgHall(wsserver_t::connection_ptr conn, wsserver_t::message_ptr msg)
         {
             std::string rsp_str;
             Json::Value rsp_json;

@@ -73,24 +73,24 @@ namespace gomoku
             // ...
         }
 
-        // /// 处理聊天动作
-        // Json::Value HandleChat(const Json::Value &req)
-        // {
-        // }
+        /// 处理聊天动作
+        Json::Value HandleChat(const Json::Value &req)
+        {
+        }
 
-        // /// 处理下棋动作
-        // Json::Value HandleChess(const Json::Value &req)
-        // {
-        // }
+        /// 处理下棋动作
+        Json::Value HandleChess(const Json::Value &req)
+        {
+        }
 
-        // /// 处理玩家退出房间动作
-        // void HandleExitRoom(uint64_t uid)
-        // {
-        // }
-        // /// 广播给房间内所有玩家
-        // void Broadcast(const Json::Value &rsp)
-        // {
-        // }
+        /// 处理玩家退出房间动作
+        void HandleExitRoom(uint64_t uid)
+        {
+        }
+        /// 广播给房间内所有玩家
+        void Broadcast(const Json::Value &rsp)
+        {
+        }
     };
 
     using room_ptr = std::shared_ptr<Room>;
@@ -145,9 +145,25 @@ namespace gomoku
                 return room_ptr();
             return it2->second;
         }
+
         /// 通过rid销毁房间
+        void DestroyRoom(uint64_t rid)
+        {
+
+        }
 
         /// 删除房间中指定用户
+        void RemoveUser(uint64_t uid)
+        {
+            room_ptr rp = GetRoomByUid(uid);
+            if(rp.get() == nullptr)
+                return;
+            rp->HandleExitRoom(uid);
+            if(rp->GetPlayerCnt() == 0)
+            {
+                DestroyRoom(rp->GetRid());
+            }
+        }
 
         /// 给两个匹配成功的用户创建房间
         room_ptr CreateRoomForTwoUser(uint64_t uid1, uint64_t uid2)
