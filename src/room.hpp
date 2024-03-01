@@ -42,107 +42,151 @@ public:
     {
         mylog::INFO_LOG("销毁房间结束，rid = %lu", _rid);
     }
-    /*处理玩家的请求*/
+    /*总地处理玩家的请求*/
     void HandleRequest(const Json::Value &req)
     {
+        // 1.判断房间号是否一致
+        Json::Value rsp;
+        uint64_t rid = req["room_id"].asUInt64();
+        if(rid != _rid)
+        {
+            rsp["optype"] = req["optype"].asString();
+            rsp["result"] = false;
+            rsp["reason"] = "房间号不一致";
+            Broadcast(rsp);
+            return;
+        }
+        // 2.根据不同请求调用不同的处理函数，最后广播出去
+        if(req["opytpe"].asString() == "put_chess") //处理下棋
+        {
+            rsp = HandleChess(req);
+
+            // 有winner，更新数据库数据
+            if(rsp["winner"].asUInt64() != 0)
+            {
+                uint64_t winner = rsp["winner"].asUInt64();
+                uint64_t loser = (winner == _whiteUid) ? _blackUid : _whiteUid;
+                _ut->Win(winner);
+                _ut->Lose(loser);
+                _status = room_status::GAME_OVER;
+            }
+        }
+        else if(req["optype"].asString() == "chat")
+        {
+            rsp = HandleChat(req);
+        }
+        else
+        {
+            rsp["optype"] = req["optype"].asString();
+            rsp["result"] = false;
+            rsp["reason"] = "未知的请求";
+            return;
+        }
+        // 3.把响应广播给所有玩家
+        Broadcast(rsp);
     }
+    /*处理玩家退出房间动作*/
+    void HandleExitRoom(uint64_t uid)
+    {
+        // 1.若下棋过程中玩家退出，则另一玩家获胜
+        // 若下棋结束后退出，则正常退出
+        Json::Value rsp;
+        if(_status == room_status::GAME_START)
+        {
+            rsp["optype"] = "put_chess";
+            rsp["result"] = true;
+            rsp["reason"] = "对方掉线，你胜利了";
+            rsp["room_id"] = _rid;
+            rsp["uid"] = uid;
+            rsp["row"] = -1;
+            rsp["col"] = -1;
+            rsp["winner"] = uid == _whiteUid ? _blackUid : _whiteUid;
+            // 更新数据库用户信息
+            _ut->Win(_whiteUid);
+            _ut->Lose(_blackUid);
+        }
+        Broadcast(rsp);
+
+        // 2.房间玩家数量-1
+        _playerCnt -= 1;
+    }
+private:
     /*处理下棋动作*/
     Json::Value HandleChess(const Json::Value &req)
     {
         /*
             待优化，减少重复代码。。
         */
-        // 1.判断房间号是否一致
-        Json::Value rsp;
-        uint64_t rid = req["room_id"].asUInt64();
-        if(rid != _rid)
-        {
-            rsp["optype"] = "put_chess";
-            rsp["result"] = false;
-            rsp["reason"] = "房间号不一致";
-            return rsp;
-        }
+        Json::Value rsp = req;
+        
         // 2.判断玩家是否在线，有人不在线，则另一个人获胜
         int req_uid = req["uid"].asInt64();
         int row = req["row"].asInt();
         int col = req["col"].asInt();
         if(_ou->InRoom(_whiteUid) == false)
         {
-            rsp["optype"] = "put_chess";
             rsp["result"] = true;
             rsp["reason"] = "对方掉线，你胜利了";
-            rsp["room_id"] = _rid;
-            rsp["uid"] = req_uid;
-            rsp["row"] = row;
-            rsp["col"] = col;
             rsp["winner"] = _blackUid;
-            // 更新数据库用户信息
-            _ut->Win(_blackUid);
-            _ut->Lose(_whiteUid);
             return rsp;
         }
         if(_ou->InRoom(_blackUid) == false)
         {
-            rsp["optype"] = "put_chess";
             rsp["result"] = true;
             rsp["reason"] = "对方掉线，你胜利了";
-            rsp["room_id"] = _rid;
-            rsp["uid"] = req_uid;
-            rsp["row"] = row;
-            rsp["col"] = col;
             rsp["winner"] = _whiteUid;
-            // 更新数据库用户信息
-            _ut->Win(_whiteUid);
-            _ut->Lose(_blackUid);
             return rsp;
         }
         // 3.判断下棋位置是否合理，合理则下棋
         if(_board[row][col] != 0)
         {
-            rsp["optype"] = "put_chess";
             rsp["result"] = false;
             rsp["reason"] = "当前位置已经有棋子了";
             return rsp;
         }
+        // 下棋
         char req_color = (req_uid == _whiteUid) ? WHITE_CHESS : BLACK_CHESS;
         _board[row][col] = req_color;
+
         // 4.判断下完棋后，是否有人胜利(五子连珠)
         uint64_t winner = __win(row, col, req_color);
-        rsp["optype"] = "put_chess";
+
         rsp["result"] = true;
         if(winner)
             rsp["reason"] = "对方掉线，你胜利了";
         else
             rsp["reason"] = "继续下棋";
-        rsp["room_id"] = _rid;
-        rsp["uid"] = req_uid;
-        rsp["row"] = row;
-        rsp["col"] = col;
         rsp["winner"] = winner;
-        // 更新数据库用户信息
-        uint64_t loser = (winner == _whiteUid) ? _blackUid : _whiteUid;
-        _ut->Win(winner);
-        _ut->Lose(loser);
         return rsp;
     }
     /*处理聊天动作*/
     Json::Value HandleChat(const Json::Value &req)
     {
+        Json::Value rsp = req;
+        rsp["result"] = true;
+        return rsp;
     }
-    /*处理玩家退出房间动作*/
-    void HandleExitRoom(uint64_t uid)
-    {
-    }
+    
     /*广播给房间内所有玩家*/
     void Broadcast(const Json::Value &rsp)
     {
+        // 1.序列化json格式的rsp为字符串
+        std::string body;
+        util::json::serialize(rsp, body);
+        // 2.获取房间所有用户的连接并发送
+        wsserver_t::connection_ptr conn1 = _ou->GetConnFromRoom(_whiteUid);
+        wsserver_t::connection_ptr conn2 =_ou->GetConnFromRoom(_blackUid);
+        if(conn1.get())
+            conn1->send(body);
+        if(conn2.get())
+            conn2->send(body);
     }
 private:
     /*判断是否有五子连珠*/
     bool __fiveChess(int row, int col, int row_offset, int col_offset, char color)
     {
         int cnt = 1;
-        for(int i = 0; i < 2; ++i)
+        for(int i = 0; i < 2; ++i) //判断两个方向
         {
             int r = row + row_offset;
             int c = col + col_offset;
@@ -156,6 +200,8 @@ private:
             row_offset *= -1;
             col_offset *= -1;
         }
+        if(cnt >= 5) return true;
+        else return false;
     }
     
     /*从(row,col)位置开始往8个方向扫描，判断是否有胜利者*/
