@@ -100,7 +100,6 @@ int main()
 {
     std::cout << "Start" << std::endl;
     gomoku::GomokuServer svr(HOST, PORT, USER, PASS, DBNAME);
-    svr.Start(8999);
-    // gomoku::test_mysql_util();
+    svr.Start(8888);
     return 0;
 }

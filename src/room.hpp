@@ -56,8 +56,9 @@ public:
             Broadcast(rsp);
             return;
         }
+        mylog::INFO_LOG("房间号一致");
         // 2.根据不同请求调用不同的处理函数，最后广播出去
-        if(req["opytpe"].asString() == "put_chess") //处理下棋
+        if(req["optype"].asString() == "put_chess") //处理下棋
         {
             rsp = HandleChess(req);
 
@@ -70,19 +71,24 @@ public:
                 _ut->Lose(loser);
                 _status = room_status::GAME_OVER;
             }
+            mylog::INFO_LOG("下棋请求处理完毕");
         }
         else if(req["optype"].asString() == "chat")
         {
             rsp = HandleChat(req);
+            mylog::INFO_LOG("聊天请求处理完毕");
         }
         else
         {
             rsp["optype"] = req["optype"].asString();
             rsp["result"] = false;
             rsp["reason"] = "未知的请求";
-            return;
+            return Broadcast(rsp);
         }
         // 3.把响应广播给所有玩家
+        std::string rsp_str;
+        util::json::serialize(rsp, rsp_str);
+        // mylog::INFO_LOG("给房间中的用户广播信息：%s", rsp_str.c_str());
         Broadcast(rsp);
     }
     /*处理玩家退出房间动作*/
@@ -93,6 +99,8 @@ public:
         Json::Value rsp;
         if(_status == room_status::GAME_START)
         {
+            uint64_t winnerid = (uid == _whiteUid ? _blackUid : _whiteUid);
+            uint64_t loserid = (winnerid == _whiteUid ? _blackUid : _whiteUid);
             rsp["optype"] = "put_chess";
             rsp["result"] = true;
             rsp["reason"] = "对方掉线，你胜利了";
@@ -100,10 +108,12 @@ public:
             rsp["uid"] = uid;
             rsp["row"] = -1;
             rsp["col"] = -1;
-            rsp["winner"] = uid == _whiteUid ? _blackUid : _whiteUid;
+            rsp["winner"] = winnerid;
             // 更新数据库用户信息
-            _ut->Win(_whiteUid);
-            _ut->Lose(_blackUid);
+            _ut->Win(winnerid);
+            _ut->Lose(loserid);
+            _status = room_status::GAME_OVER; 
+
         }
         Broadcast(rsp);
 
@@ -153,7 +163,7 @@ private:
 
         rsp["result"] = true;
         if(winner)
-            rsp["reason"] = "对方掉线，你胜利了";
+            rsp["reason"] = "五子连珠，你赢啦！";
         else
             rsp["reason"] = "继续下棋";
         rsp["winner"] = winner;
@@ -178,8 +188,12 @@ private:
         wsserver_t::connection_ptr conn2 =_ou->GetConnFromRoom(_blackUid);
         if(conn1.get())
             conn1->send(body);
+        else
+            mylog::INFO_LOG("白棋玩家获取连接失败");
         if(conn2.get())
             conn2->send(body);
+        else
+            mylog::INFO_LOG("黑棋玩家获取连接失败");
     }
 private:
     /*判断是否有五子连珠*/

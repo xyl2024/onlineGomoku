@@ -1,6 +1,6 @@
 #ifndef _SERVER_HPP_
 #define _SERVER_HPP_
-
+#include "../mylog/mylog.h"
 #include "util.hpp"
 #include "database.hpp"
 #include "onlineUser.hpp"
@@ -106,7 +106,7 @@ namespace gomoku
             if(uri == "/hall") //处理游戏大厅长连接的消息请求
                 WsMsgHall(conn, msg);
             else if(uri == "/room") //处理游戏房间长连接的消息请求
-                ;// WsMsgRoom(conn, msg);
+                WsMsgRoom(conn, msg);
         }
     private:/*Http回调函数调用的业务处理*/
         /*处理静态资源请求*/
@@ -240,6 +240,7 @@ namespace gomoku
             // 获取信息成功，组织响应
             std::string body;
             util::json::serialize(user_info, body);
+            // std::cout << "InfoHandler(): 从数据库中拿出来响应的数据: " << body << std::endl;
             conn->set_body(body);
             conn->append_header("Content-Type", "application/json");
             conn->set_status(websocketpp::http::status_code::ok);
@@ -365,7 +366,11 @@ namespace gomoku
         {
             // 1.获取用户session
             Session::ptr sp = __GetSessionByCookie(conn);
-            if(sp.get() == nullptr) return;
+            if(sp.get() == nullptr)
+            {
+                mylog::INFO_LOG("无法找到会话");
+                return;
+            }
             // 2.获取用户房间信息
             room_ptr rp = _rm.GetRoomByUid(sp->GetUid());
             if(rp.get() == nullptr)
@@ -373,13 +378,15 @@ namespace gomoku
                 mylog::INFO_LOG("未找到当前用户的房间！");
                 __OrganizeWebSocketResponseJson(conn, "wsmsg", false, "未找到当前用户的房间！");
             }
-            // 3.把请求信息反序列化成json并让Room对象处理
+            // 3.把请求信息反序列化成json并让Room对象处理并响应
             Json::Value req;
             std::string req_str = msg->get_payload();
             if(util::json::unserialize(req_str, req) == false)
             {
+                mylog::INFO_LOG("无法解析请求");
                 return __OrganizeWebSocketResponseJson(conn, "wsmsg", false, "无法解析请求");
             }
+            mylog::INFO_LOG("开始处理Room请求");
             rp->HandleRequest(req);
         }
     private:/*一些辅助性的函数*/

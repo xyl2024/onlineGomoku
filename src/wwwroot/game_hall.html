@@ -54,7 +54,7 @@
                 type: "get",
                 success: function(res) {
                     var info_html = "<p>" + "用户：" + res.username + " 积分：" + res.score + 
-                        "</br>" + "比赛场次：" + res.total_count + " 获胜场次：" + res.win_count + "</p>";
+                        "</br>" + "比赛场次：" + res.pk_cnt + " 获胜场次：" + res.win_cnt + "</p>";
                     var screen_div = document.getElementById("screen");
                     screen_div.innerHTML = info_html;
 

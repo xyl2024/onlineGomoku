@@ -16,6 +16,7 @@ namespace gomoku
         // 主机、端口、MySQL用户名、MySQL密码、数据库名
         UserTable(const char *host, uint16_t port, const char *mysql_usr, const char *mysql_pwd, const char *db_name)
         {
+            std::cout << "Connecting to mysql...\n";
             _mysql = util::mysql::create(host, port, mysql_usr, mysql_pwd, db_name);
             assert(_mysql != NULL);
             std::cout << "UserTable模块初始化完毕";
