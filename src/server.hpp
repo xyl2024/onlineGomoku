@@ -57,25 +57,13 @@ namespace gomoku
             
             // 2.根据不同请求，调用不同的业务处理函数
             if(method == "POST" && uri == "/reg")
-            {
-                mylog::DEBUG_LOG("正在处理用户注册的HTTP请求");
                 return RegisteHandler(conn);
-            }
             else if(method == "POST" && uri == "/login")
-            {
-                mylog::DEBUG_LOG("正在处理用户登录的HTTP请求");
                 return LoginHandler(conn);
-            }
             else if(method == "GET" && uri == "/info")
-            {
-                mylog::DEBUG_LOG("正在处理获取用户信息的HTTP请求");
                 return InfoHandler(conn);
-            }
             else 
-            {
-                // mylog::DEBUG_LOG("正在处理静态资源请求");
                 return FileHandler(conn); //静态资源请求
-            }
         }
         /*处理websocket长连接开启的回调*/
         void WsOpenCallback(websocketpp::connection_hdl hdl)
@@ -85,13 +73,9 @@ namespace gomoku
             auto req = conn->get_request();
             std::string uri = req.get_uri();
             if(uri == "/hall") //建立游戏大厅的长连接
-            {
                 WsOpenHall(conn);
-            }
             else if(uri == "/room") //建立游戏房间的长连接
-            {
                 WsOpenRoom(conn);
-            }
         }
         /*处理websocket长连接断开的回调*/
         void WsCloseCallback(websocketpp::connection_hdl hdl)
@@ -101,13 +85,9 @@ namespace gomoku
             auto req = conn->get_request();
             std::string uri = req.get_uri();
             if(uri == "/hall") //关闭游戏大厅的长连接
-            {
                 WsCloseHall(conn);
-            }
             else if(uri == "/room") //关闭游戏房间的长连接
-            {
-
-            }
+                WsCloseRoom(conn);
         }
         /*处理websocket长连接通信消息的回调*/
         void WsMsgCallback(websocketpp::connection_hdl hdl, wsserver_t::message_ptr msg)
@@ -117,13 +97,9 @@ namespace gomoku
             auto req = conn->get_request();
             std::string uri = req.get_uri();
             if(uri == "/hall") //处理游戏大厅长连接的消息请求
-            {
                 WsMsgHall(conn, msg);
-            }
             else if(uri == "/room") //处理游戏房间长连接的消息请求
-            {
-
-            }
+                ;// WsMsgRoom(conn, msg);
         }
     private:/*Http回调函数调用的业务处理*/
         /*处理静态资源请求*/
@@ -335,11 +311,6 @@ namespace gomoku
             // 2.设置session失效时间
             _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
         }
-        /*
-        
-        not tested.
-        
-        */
         /*关闭游戏房间的长连接*/
         void WsCloseRoom(wsserver_t::connection_ptr conn)
         {

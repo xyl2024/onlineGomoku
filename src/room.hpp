@@ -40,7 +40,7 @@ public:
     }
     ~Room()
     {
-        mylog::INFO_LOG("销毁房间结束，rid = %lu", _rid);
+        mylog::INFO_LOG("销毁房间成功，rid = %lu", _rid);
     }
     /*总地处理玩家的请求*/
     void HandleRequest(const Json::Value &req)
