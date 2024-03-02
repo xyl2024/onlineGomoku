@@ -254,6 +254,9 @@ public:
 
 
 using room_ptr = std::shared_ptr<Room>;
+
+
+
 /*
     房间管理类：负责创建房间、查找房间、销毁房间等与房间相关的工作。
     - 当两个玩家匹配成功，将为他们[创建房间]
@@ -309,6 +312,17 @@ public:
     /// 通过rid销毁房间
     void DestroyRoom(uint64_t rid)
     {
+        // 移除用户管理和房间管理哈希表中的数据
+        room_ptr rp = GetRoomByRid(rid);
+        if(rp.get() == nullptr)
+            return;
+        uint64_t uid1 = rp->GetBlackUid();
+        uint64_t uid2 = rp->GetWhiteUid();
+        std::unique_lock<std::mutex> lock(_mtx);
+        _users.erase(uid1);
+        _users.erase(uid2);
+        _rooms.erase(rid);
+        
     }
 
     /// 删除房间中指定用户
