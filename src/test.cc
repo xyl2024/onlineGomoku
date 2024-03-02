@@ -14,7 +14,7 @@ namespace gomoku
     void test_mysql_util()
     {
         MYSQL *mysql = util::mysql::create(HOST, PORT, USER, PASS, DBNAME);
-        const char *sql = "insert stu values(null, 18, '李瑟');";
+        const char *sql = "insert stu values(999, 'aasdaf', 'asdagasf', 1000, 0, 0);";
         if (!util::mysql::exec(mysql, sql))
         {
             mylog::ERROR_LOG("出错了");
@@ -98,7 +98,9 @@ namespace gomoku
 }
 int main()
 {
+    std::cout << "Start" << std::endl;
     gomoku::GomokuServer svr(HOST, PORT, USER, PASS, DBNAME);
-    svr.Start(8888);
+    svr.Start(8999);
+    // gomoku::test_mysql_util();
     return 0;
 }

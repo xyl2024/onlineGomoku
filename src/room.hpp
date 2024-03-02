@@ -283,6 +283,7 @@ public:
     RoomManager(UserTable *ut, OnlineUser *olu)
         : _userTable(ut), _onlineUser(olu)
     {
+        std::cout << "RoomManager模块初始化完成\n";
     }
     /// 通过rid找房间对象
     room_ptr GetRoomByRid(uint64_t rid)

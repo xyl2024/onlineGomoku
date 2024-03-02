@@ -26,8 +26,13 @@ namespace gomoku
     public:
         /*成员初始化*/
         GomokuServer(const char *host, uint16_t port, const char *mysql_usr, const char *mysql_pwd, const char *db_name, const std::string &wwwroot = WWWROOT)
-            : _ut(host, port, mysql_usr, mysql_pwd, db_name), _rm(&_ut, &_ou), _sm(&_wssvr), _mch(&_rm, &_ut, &_ou), _webRoot(wwwroot)
+            : _ut(host, port, mysql_usr, mysql_pwd, db_name)
+            , _rm(&_ut, &_ou)
+            , _sm(&_wssvr)
+            , _mch(&_rm, &_ut, &_ou)
+            , _webRoot(wwwroot)
         {
+            std::cout << "进入GomokuServer()\n";
             // 初始化websocket服务器设置
             _wssvr.set_access_channels(websocketpp::log::alevel::none);
             _wssvr.init_asio();
@@ -37,10 +42,12 @@ namespace gomoku
             _wssvr.set_open_handler(std::bind(&GomokuServer::WsOpenCallback, this, std::placeholders::_1));
             _wssvr.set_close_handler(std::bind(&GomokuServer::WsCloseCallback, this, std::placeholders::_1));
             _wssvr.set_message_handler(std::bind(&GomokuServer::WsMsgCallback, this, std::placeholders::_1, std::placeholders::_2));
+            std::cout << "退出GomokuServer()\n";
         }
         /*启动服务器*/
         void Start(int port)
-        {
+        { 
+            std::cout << "启动服务器\n";
             _wssvr.listen(port);
             _wssvr.start_accept();
             _wssvr.run();
@@ -352,6 +359,28 @@ namespace gomoku
             }
             else
                 return __OrganizeWebSocketResponseJson(conn, "unkonw", false, "未知的请求");
+        }
+        /*处理游戏房间长连接的消息请求*/
+        void WsMsgRoom(wsserver_t::connection_ptr conn, wsserver_t::message_ptr msg)
+        {
+            // 1.获取用户session
+            Session::ptr sp = __GetSessionByCookie(conn);
+            if(sp.get() == nullptr) return;
+            // 2.获取用户房间信息
+            room_ptr rp = _rm.GetRoomByUid(sp->GetUid());
+            if(rp.get() == nullptr)
+            {
+                mylog::INFO_LOG("未找到当前用户的房间！");
+                __OrganizeWebSocketResponseJson(conn, "wsmsg", false, "未找到当前用户的房间！");
+            }
+            // 3.把请求信息反序列化成json并让Room对象处理
+            Json::Value req;
+            std::string req_str = msg->get_payload();
+            if(util::json::unserialize(req_str, req) == false)
+            {
+                return __OrganizeWebSocketResponseJson(conn, "wsmsg", false, "无法解析请求");
+            }
+            rp->HandleRequest(req);
         }
     private:/*一些辅助性的函数*/
         /*组织一个json格式的websocket响应(减少重复代码)*/

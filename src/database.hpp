@@ -18,6 +18,7 @@ namespace gomoku
         {
             _mysql = util::mysql::create(host, port, mysql_usr, mysql_pwd, db_name);
             assert(_mysql != NULL);
+            std::cout << "UserTable模块初始化完毕";
         }
         /// 用户注册，新增一个user
         /// 以Json::Value对象的方式传入

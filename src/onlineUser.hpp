@@ -15,6 +15,10 @@ private:
     std::unordered_map<uint64_t, wsserver_t::connection_ptr> _roomUser;
 
 public:
+    OnlineUser()
+    {
+        std::cout <<"OnlineUser()\n";
+    }
     // 用户进入大厅
     void EnterHall(uint64_t uid, wsserver_t::connection_ptr &conn)
     {
