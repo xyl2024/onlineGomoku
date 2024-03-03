@@ -32,17 +32,16 @@ namespace gomoku
             , _mch(&_rm, &_ut, &_ou)
             , _webRoot(wwwroot)
         {
-            std::cout << "进入GomokuServer()\n";
-            // 初始化websocket服务器设置
-            _wssvr.set_access_channels(websocketpp::log::alevel::none);
-            _wssvr.init_asio();
-            _wssvr.set_reuse_addr(true);
-            // 设置 http请求的回调 & websocket请求的回调
-            _wssvr.set_http_handler(std::bind(&GomokuServer::HttpCallback, this, std::placeholders::_1));
-            _wssvr.set_open_handler(std::bind(&GomokuServer::WsOpenCallback, this, std::placeholders::_1));
-            _wssvr.set_close_handler(std::bind(&GomokuServer::WsCloseCallback, this, std::placeholders::_1));
-            _wssvr.set_message_handler(std::bind(&GomokuServer::WsMsgCallback, this, std::placeholders::_1, std::placeholders::_2));
-            std::cout << "退出GomokuServer()\n";
+            // 1.初始化websocket服务器设置
+            _wssvr.set_access_channels(websocketpp::log::alevel::none); //设置websocketpp库日志为失效
+            _wssvr.init_asio(); //初始化asio框架中的io_service调度器
+            _wssvr.set_reuse_addr(true); //设置地址重用
+
+            // 2.设置 http请求的回调 & websocket请求的回调
+            _wssvr.set_http_handler(std::bind(&GomokuServer::HttpCallback, this, std::placeholders::_1)); //设置http请求时的动作
+            _wssvr.set_open_handler(std::bind(&GomokuServer::WsOpenCallback, this, std::placeholders::_1)); //设置websocket握手成功时的动作
+            _wssvr.set_close_handler(std::bind(&GomokuServer::WsCloseCallback, this, std::placeholders::_1)); //设置websocket关闭连接时的动作
+            _wssvr.set_message_handler(std::bind(&GomokuServer::WsMsgCallback, this, std::placeholders::_1, std::placeholders::_2)); //设置websocket消息推送时的动作
         }
         /*启动服务器*/
         void Start(int port)
@@ -53,7 +52,8 @@ namespace gomoku
             _wssvr.run();
         }
     private: /*_wssvr的回调函数*/
-        /*处理http短连接的回调*/
+
+        /*处理http请求的回调*/
         void HttpCallback(websocketpp::connection_hdl hdl)
         {
             // 1.获取连接对象conn
@@ -64,11 +64,11 @@ namespace gomoku
             
             // 2.根据不同请求，调用不同的业务处理函数
             if(method == "POST" && uri == "/reg")
-                return RegisteHandler(conn);
+                return RegisteHandler(conn); //注册请求
             else if(method == "POST" && uri == "/login")
-                return LoginHandler(conn);
+                return LoginHandler(conn); //登录请求
             else if(method == "GET" && uri == "/info")
-                return InfoHandler(conn);
+                return InfoHandler(conn); //用户信息请求
             else 
                 return FileHandler(conn); //静态资源请求
         }
@@ -108,7 +108,9 @@ namespace gomoku
             else if(uri == "/room") //处理游戏房间长连接的消息请求
                 WsMsgRoom(conn, msg);
         }
+
     private:/*Http回调函数调用的业务处理*/
+
         /*处理静态资源请求*/
         void FileHandler(wsserver_t::connection_ptr conn)
         {
@@ -248,7 +250,9 @@ namespace gomoku
             // 3.刷新会话过期时间
             _sm.SetSessionTime(sp->GetSid(), SESSION_TIMEOUT);
         }
+
     private:/*websocket回调函数调用的业务处理*/
+    
         /*建立游戏大厅的长连接*/
         void WsOpenHall(wsserver_t::connection_ptr conn)
         {

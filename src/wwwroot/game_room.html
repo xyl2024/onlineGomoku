@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -8,12 +9,14 @@
     <link rel="stylesheet" href="css/common.css">
     <link rel="stylesheet" href="css/game_room.css">
 </head>
+
 <body>
-    <div class="nav">网络五子棋对战游戏</div>
+    <!-- <div class="nav">正在游戏中...</div> -->
     <div class="container">
         <div id="chess_area">
             <!-- 棋盘区域, 需要基于 canvas 进行实现 -->
             <canvas id="chess" width="450px" height="450px"></canvas>
+
             <!-- 显示区域 -->
             <div id="screen"> 等待玩家连接中... </div>
         </div>
@@ -21,7 +24,6 @@
             <div id="chat_show">
                 <p id="self_msg">你好！</p></br>
                 <p id="peer_msg">你好！</p></br>
-                <p id="peer_msg">leihoua~</p></br>
             </div>
             <div id="msg_show">
                 <input type="text" id="chat_input">
@@ -32,28 +34,34 @@
     <script>
         let chessBoard = [];
         let BOARD_ROW_AND_COL = 15;
-        let chess = document.getElementById('chess');
-        let context = chess.getContext('2d');//获取chess控件的2d画布
-        
+        let chess = document.getElementById('chess'); //获取棋盘的canvas区域
+        let context = chess.getContext('2d');//获取canvas的2d的绘图上下文，用来在canvas上二维渲染图像
+
         var ws_url = "ws://" + location.host + "/room";
         var ws_hdl = new WebSocket(ws_url);
 
         var room_info = null;//用于保存房间信息 
         var is_me;
 
-        function initGame() {
+        // 初始化游戏内容
+        function initGame() 
+        {
             initBoard();
             context.strokeStyle = "#BFBFBF";
             // 背景图片
             let logo = new Image();
             logo.src = "image/sky.jpeg";
-            logo.onload = function () {
+
+            logo.onload = function () 
+            {
                 // 绘制图片
                 context.drawImage(logo, 0, 0, 450, 450);
                 // 绘制棋盘
                 drawChessBoard();
             }
         }
+
+        // 初始化棋盘变量
         function initBoard() {
             for (let i = 0; i < BOARD_ROW_AND_COL; i++) {
                 chessBoard[i] = [];
@@ -62,6 +70,7 @@
                 }
             }
         }
+        
         // 绘制棋盘网格线
         function drawChessBoard() {
             for (let i = 0; i < BOARD_ROW_AND_COL; i++) {
@@ -98,7 +107,7 @@
             //      2. 当前位置是否已经被占用
             //  2. 向服务器发送走棋请求
             if (!is_me) {
-                alert("等待对方走棋....");
+                alert("等待对方走棋");
                 return;
             }
             let x = e.offsetX;
@@ -114,10 +123,12 @@
             //oneStep(col, row, true);
             //向服务器发送走棋请求，收到响应后，再绘制棋子
             send_chess(row, col);
+            is_me = !is_me;
+            set_screen(is_me);
         }
         function send_chess(r, c) {
             var chess_info = {
-                optype : "put_chess",
+                optype: "put_chess",
                 room_id: room_info.room_id,
                 uid: room_info.uid,
                 row: r,
@@ -127,27 +138,29 @@
             console.log("click:" + JSON.stringify(chess_info));
         }
 
-        window.onbeforeunload = function() {
+        window.onbeforeunload = function () {
             ws_hdl.close();
         }
-        ws_hdl.onopen = function() {
+        ws_hdl.onopen = function () {
             console.log("房间长连接建立成功");
         }
-        ws_hdl.onclose = function() {
+        ws_hdl.onclose = function () {
             console.log("房间长连接断开");
         }
-        ws_hdl.onerror = function() {
+        ws_hdl.onerror = function () {
             console.log("房间长连接出错");
         }
+
+        // 绘制提示框
         function set_screen(me) {
             var screen_div = document.getElementById("screen");
             if (me) {
                 screen_div.innerHTML = "轮到己方走棋...";
-            }else {
+            } else {
                 screen_div.innerHTML = "轮到对方走棋...";
             }
         }
-        ws_hdl.onmessage = function(evt) {
+        ws_hdl.onmessage = function (evt) {
             //1. 在收到room_ready之后进行房间的初始化
             //  1. 将房间信息保存起来
             var info = JSON.parse(evt.data);
@@ -157,7 +170,7 @@
                 is_me = room_info.uid == room_info.white_id ? true : false;
                 set_screen(is_me);
                 initGame();
-            }else if (info.optype == "put_chess"){
+            } else if (info.optype == "put_chess") {
                 console.log("put_chess" + evt.data);
                 //2. 走棋操作
                 //  3. 收到走棋消息，进行棋子绘制
@@ -170,7 +183,7 @@
                 //绘制棋子的颜色，应该根据当前下棋角色的颜色确定
                 isWhite = info.uid == room_info.white_id ? true : false;
                 //绘制棋子
-                if (info.row != -1 && info.col != -1){
+                if (info.row != -1 && info.col != -1) {
                     oneStep(info.col, info.row, isWhite);
                     //设置棋盘信息
                     chessBoard[info.row][info.col] = 1;
@@ -182,21 +195,21 @@
                 var screen_div = document.getElementById("screen");
                 if (room_info.uid == info.winner) {
                     screen_div.innerHTML = info.reason;
-                }else {
+                } else {
                     screen_div.innerHTML = "你输了";
                 }
 
                 var chess_area_div = document.getElementById("chess_area");
                 var button_div = document.createElement("div");
                 button_div.innerHTML = "返回大厅";
-                button_div.onclick = function() {
+                button_div.onclick = function () {
                     ws_hdl.close();
                     location.replace("/game_hall.html");
                 }
                 chess_area_div.appendChild(button_div);
             } else if (info.optype == "chat") {
                 //收到一条消息，判断result，如果为true则渲染一条消息到显示框中
-                if(info.result == false) {
+                if (info.result == false) {
                     alert(info.reason);
                     return;
                 }
@@ -204,7 +217,7 @@
                 msg_div.innerHTML = info.message;
                 if (info.uid == room_info.uid) {
                     msg_div.setAttribute("id", "self_msg");
-                }else {
+                } else {
                     msg_div.setAttribute("id", "peer_msg");
                 }
                 var br_div = document.createElement("br");
@@ -218,15 +231,16 @@
         //  1. 捕捉聊天输入框消息
         //  2. 给发送按钮添加点击事件，点击俺就的时候，获取到输入框消息，发送给服务器
         var cb_div = document.getElementById("chat_button");
-        cb_div.onclick = function() {
+        cb_div.onclick = function () {
             var send_msg = {
-                optype : "chat",
-                room_id : room_info.room_id,
-                uid : room_info.uid,
-                message : document.getElementById("chat_input").value
+                optype: "chat",
+                room_id: room_info.room_id,
+                uid: room_info.uid,
+                message: document.getElementById("chat_input").value
             };
             ws_hdl.send(JSON.stringify(send_msg));
         }
     </script>
 </body>
+
 </html>
